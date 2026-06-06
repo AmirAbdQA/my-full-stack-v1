@@ -54,6 +54,9 @@ class User(UserBase, table=True):
         sa_type=DateTime(timezone=True),  # type: ignore
     )
     items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
+    cart_items: list["CartItem"] = Relationship(
+        back_populates="user", cascade_delete=True
+    )
 
 
 # Properties to return via API, id is always required
@@ -127,3 +130,85 @@ class TokenPayload(SQLModel):
 class NewPassword(SQLModel):
     token: str
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class ProductBase(SQLModel):
+    name: str = Field(min_length=1, max_length=255)
+    description: str = Field(min_length=1, max_length=2000)
+    category: str = Field(min_length=1, max_length=100)
+    image_url: str = Field(max_length=500)
+    price: float = Field(ge=0)
+    inventory_count: int = Field(default=0, ge=0)
+    is_active: bool = True
+
+
+class ProductCreate(ProductBase):
+    pass
+
+
+class ProductUpdate(SQLModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, min_length=1, max_length=2000)
+    category: str | None = Field(default=None, min_length=1, max_length=100)
+    image_url: str | None = Field(default=None, max_length=500)
+    price: float | None = Field(default=None, ge=0)
+    inventory_count: int | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+
+
+class Product(ProductBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    cart_items: list["CartItem"] = Relationship(back_populates="product")
+
+
+class ProductPublic(ProductBase):
+    id: uuid.UUID
+    created_at: datetime | None = None
+
+
+class ProductsPublic(SQLModel):
+    data: list[ProductPublic]
+    count: int
+
+
+class CartItemBase(SQLModel):
+    quantity: int = Field(default=1, ge=1, le=99)
+
+
+class CartItemCreate(CartItemBase):
+    product_id: uuid.UUID
+
+
+class CartItemUpdate(SQLModel):
+    quantity: int = Field(ge=1, le=99)
+
+
+class CartItem(CartItemBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    user_id: uuid.UUID = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
+    product_id: uuid.UUID = Field(
+        foreign_key="product.id", nullable=False, ondelete="CASCADE"
+    )
+    user: User | None = Relationship(back_populates="cart_items")
+    product: Product | None = Relationship(back_populates="cart_items")
+
+
+class CartItemPublic(SQLModel):
+    id: uuid.UUID
+    quantity: int
+    product: ProductPublic
+    line_total: float
+
+
+class CartPublic(SQLModel):
+    items: list[CartItemPublic]
+    total_items: int
+    subtotal: float

@@ -4,7 +4,19 @@ from typing import Any
 from sqlmodel import Session, select
 
 from app.core.security import get_password_hash, verify_password
-from app.models import Item, ItemCreate, User, UserCreate, UserUpdate
+from app.models import (
+    CartItem,
+    CartItemCreate,
+    CartItemUpdate,
+    Item,
+    ItemCreate,
+    Product,
+    ProductCreate,
+    ProductUpdate,
+    User,
+    UserCreate,
+    UserUpdate,
+)
 
 
 def create_user(*, session: Session, user_create: UserCreate) -> User:
@@ -66,3 +78,59 @@ def create_item(*, session: Session, item_in: ItemCreate, owner_id: uuid.UUID) -
     session.commit()
     session.refresh(db_item)
     return db_item
+
+
+def create_product(*, session: Session, product_in: ProductCreate) -> Product:
+    db_product = Product.model_validate(product_in)
+    session.add(db_product)
+    session.commit()
+    session.refresh(db_product)
+    return db_product
+
+
+def update_product(
+    *, session: Session, db_product: Product, product_in: ProductUpdate
+) -> Product:
+    update_data = product_in.model_dump(exclude_unset=True)
+    db_product.sqlmodel_update(update_data)
+    session.add(db_product)
+    session.commit()
+    session.refresh(db_product)
+    return db_product
+
+
+def get_cart_item_by_product(
+    *, session: Session, user_id: uuid.UUID, product_id: uuid.UUID
+) -> CartItem | None:
+    statement = select(CartItem).where(
+        CartItem.user_id == user_id, CartItem.product_id == product_id
+    )
+    return session.exec(statement).first()
+
+
+def add_to_cart(
+    *, session: Session, user_id: uuid.UUID, cart_item_in: CartItemCreate
+) -> CartItem:
+    db_cart_item = get_cart_item_by_product(
+        session=session, user_id=user_id, product_id=cart_item_in.product_id
+    )
+    if db_cart_item:
+        db_cart_item.quantity += cart_item_in.quantity
+    else:
+        db_cart_item = CartItem.model_validate(
+            cart_item_in, update={"user_id": user_id}
+        )
+    session.add(db_cart_item)
+    session.commit()
+    session.refresh(db_cart_item)
+    return db_cart_item
+
+
+def update_cart_item(
+    *, session: Session, db_cart_item: CartItem, cart_item_in: CartItemUpdate
+) -> CartItem:
+    db_cart_item.quantity = cart_item_in.quantity
+    session.add(db_cart_item)
+    session.commit()
+    session.refresh(db_cart_item)
+    return db_cart_item
